@@ -51,7 +51,7 @@ def load_model():
             revision="2024-08-26",
             load_in_8bit=False,
             low_cpu_mem_usage=True,
-            torch_dtype="auto"
+            torch_dtype=torch.float32  # Force float32 for CPU compatibility
         )
         # Set model to eval mode to save memory
         model.eval()
@@ -261,19 +261,17 @@ if prompt := st.chat_input("Ask a question about your documents or image..."):
                         # Generate response using Moondream2
                         response = model.answer_question(enc_image, full_prompt, tokenizer)
                     elif model is not None:
-                        # Text-only mode
+                        # Text-only mode - Moondream2 needs an image, so create a blank one
                         if context_parts:
                             context_text = "\n\n".join(context_parts)
                             full_prompt = f"Answer the question based on the following context:\n\n{context_text}\n\nQuestion: {prompt}\n\nAnswer:"
                             
-                            # Use the model as a text generator
-                            inputs = tokenizer(full_prompt, return_tensors="pt")
-                            with torch.no_grad():  # Save memory during inference
-                                outputs = model.generate(**inputs, max_new_tokens=512, do_sample=True, temperature=0.7)
-                            response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-                            # Extract just the answer part
-                            if "Answer:" in response:
-                                response = response.split("Answer:")[-1].strip()
+                            # Create a blank white image for text-only queries
+                            blank_image = Image.new('RGB', (100, 100), color='white')
+                            enc_image = model.encode_image(blank_image)
+                            
+                            # Use Moondream's answer_question method with blank image
+                            response = model.answer_question(enc_image, full_prompt, tokenizer)
                         else:
                             response = "Please upload a document or image first."
                     else:
