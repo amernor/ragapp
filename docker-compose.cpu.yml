@@ -1,0 +1,60 @@
+# Docker Compose - CPU-only version
+# Usage: docker compose -f docker-compose.cpu.yml up
+#
+# This setup includes:
+# - PostgreSQL with pgvector extension
+# - Ramalama model server (CPU)
+# - RAG chatbot Streamlit app (CPU)
+
+version: '3.8'
+
+services:
+  # PostgreSQL with pgvector extension
+  pgvector:
+    image: pgvector/pgvector:pg16
+    container_name: rag-chatbot-pgvector
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-ragdb}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgvector-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+
+  # RAG Chatbot App (CPU)
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile.cpu
+    container_name: rag-chatbot-app
+    environment:
+      MODEL_NAME: vikhyatk/moondream2
+      POSTGRES_HOST: pgvector
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-ragdb}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      EMBEDDING_MODEL: BAAI/bge-small-en-v1.5
+      COLLECTION_NAME: documents
+    ports:
+      - "8501:8501"
+    volumes:
+      - moondream-cache:/root/.cache/huggingface
+    mem_limit: 16g
+    mem_reservation: 8g
+    memswap_limit: 20g
+    depends_on:
+      pgvector:
+        condition: service_healthy
+
+volumes:
+  pgvector-data:
+  moondream-cache:
